@@ -170,6 +170,8 @@ Intel Core i5-3570K CPU 3.40GHz (Ivy Bridge), 1 CPU, 4 logical and 4 physical co
 
 This does look very promising. As expected the `Baseline` parser does the best but `FParser` is not far behind. `FParsec` has very respectable performance but `FParser` manages to do a bit better. Now `FParsec` supports great error messages which is  currently not implemented in `FParser` but there are ways to support error messages without too much overhead.
 
+Another nice aspect of `FParser` is that it doesn't add any extra memory overhead compared to the `Baseline` parser.
+
 `PGO` uses a new feature in the runtime called [Dynamic Profile-Guided Optimization](https://gist.github.com/EgorBo/dc181796683da3d905a5295bfd3dd95b) which allows the jitter to improve code over time and does seem to give benefit to all parser variants over the standard approach.
 
 ## Conclusion
