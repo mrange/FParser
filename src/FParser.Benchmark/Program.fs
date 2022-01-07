@@ -36,6 +36,7 @@ module Common =
 open Common
 
 module BaselineCalculator =
+  open System.Globalization
   type ParserState(input : string) =
     class
       let mutable pos = 0
@@ -62,7 +63,7 @@ module BaselineCalculator =
           pos <- pos + 1
 
         if ppos < pos then
-          let v = Int32.Parse (input.AsSpan (ppos, pos - ppos))
+          let v = Int32.Parse (input.AsSpan (ppos, pos - ppos), NumberStyles.Integer, CultureInfo.InvariantCulture)
           e <- Value v
           consumeWhiteSpace ()
           true
@@ -242,6 +243,17 @@ module FParserCalculator =
   let inline pop exp ([<InlineIfLambda>] t) ([<InlineIfLambda>] m) = 
     pcharSat exp t |>> m .>> pskipWhitespace ()
 
+  let inline op0 ch =
+    match ch with
+    | '*' -> fun l r -> Binary ('*', ( * ), l, r)
+    | '/' -> fun l r -> Binary ('/', ( / ), l, r)
+    | _   -> failwith "Expected * or /"
+  let inline op1 ch =
+    match ch with
+    | '+' -> fun l r -> Binary ('+', ( + ), l, r)
+    | '-' -> fun l r -> Binary ('-', ( - ), l, r)
+    | _   -> failwith "Expected + or -"
+
   type ParserState() =
     class
       let struct (pexpr, sexpr) = pfwd<Expr> ()
@@ -251,16 +263,6 @@ module FParserCalculator =
         <|> (pstringSat1 "variable" (fun ch p -> (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) |>> Variable .>> pskipWhitespace ())
         <|> (ptoken "(" '(' >>. pexpr .>> ptoken ")" ')')
 
-      let op0 ch =
-        match ch with
-        | '*' -> fun l r -> Binary ('*', ( * ), l, r)
-        | '/' -> fun l r -> Binary ('/', ( / ), l, r)
-        | _   -> failwith "Expected * or /"
-      let op1 ch =
-        match ch with
-        | '+' -> fun l r -> Binary ('+', ( + ), l, r)
-        | '-' -> fun l r -> Binary ('-', ( - ), l, r)
-        | _   -> failwith "Expected + or -"
       let pop0 : Expr FParser =
         pterm >+> pchainLeft1 (pop "*/" (fun ch -> ch = '*' || ch ='/') (fun ch -> op0 ch))
       let pop1 : Expr FParser =

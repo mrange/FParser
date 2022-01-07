@@ -5,7 +5,6 @@ type FParserContext(input : string) =
     [<DefaultValue>] val mutable Pos : int
 
     member x.Input = input
-    member x.End   = input.Length
 
     member inline x.Scan ([<InlineIfLambda>] sat : char -> int -> bool) i : int =
       let input     = x.Input
@@ -13,15 +12,10 @@ type FParserContext(input : string) =
       while (c < input.Length && if sat input.[c] c then c <- c + 1; true else false) do ()
       c
 
-    member inline x.FlipDecision () = x.Pos <- ~~~x.Pos
-
-    member inline x.IsGood () = x.Pos >= 0
-
-    member inline x.IsBad () = x.Pos < 0
-
-    member inline x.SuccessAt v i =
-      x.Pos <- i
-      v
+    member inline x.FlipDecision  ()  = x.Pos <- ~~~x.Pos
+    member inline x.IsGood        ()  = x.Pos >= 0
+    member inline x.IsBad         ()  = x.Pos < 0
+    member inline x.SuccessAt     v i = x.Pos <- i; v
 
     member inline x.Expected (label : string) =
       Unchecked.defaultof<_>
@@ -53,7 +47,6 @@ module FParser =
       let pskipWhitespace (c : FParserContext) i =
         let e = c.Scan (fun ch p -> (ch >= '\u0009' && ch <= '\u000D') || (ch = '\u0020')) i
         c.SuccessAt () e
-
   open Details
 
   let inline (>+>) ([<InlineIfLambda>] v : _ -> _) ([<InlineIfLambda>] f : _ -> _) =
@@ -77,10 +70,11 @@ module FParser =
 
   let inline peof () : unit FParser =
     fun c ->
-      if c.Pos >= c.End then
-        c.SuccessAt () c.End
+      let l = c.Input.Length
+      if c.Pos >= l then
+        c.SuccessAt () l
       else
-        c.ExpectedAt "eof" c.End
+        c.ExpectedAt "eof" l
 
   let inline pchainLeft1 ([<InlineIfLambda>] psep : _ FParser) ([<InlineIfLambda>] pp : _ FParser) : _ FParser = 
     fun c ->
@@ -197,27 +191,30 @@ module FParser =
 
   let inline pchar () : char FParser = 
     fun c ->
-      let i = c.Pos
-      if i < c.End then
-        c.SuccessAt c.Input.[i] (i + 1)
+      let input = c.Input
+      let pos   = c.Pos
+      if pos < input.Length then
+        c.SuccessAt input.[pos] (pos + 1)
       else
-        c.ExpectedAt "char" i
+        c.ExpectedAt "char" pos
 
   let inline pcharSat label ([<InlineIfLambda>] sat) : char FParser = 
     fun c ->
-      let i = c.Pos
-      if i < c.End && sat (c.Input.[i]) then
-        c.SuccessAt c.Input.[i] (i + 1)
+      let input = c.Input
+      let pos   = c.Pos
+      if pos < input.Length && sat (input.[pos]) then
+        c.SuccessAt c.Input.[pos] (pos + 1)
       else
-        c.ExpectedAt label i
+        c.ExpectedAt label pos
 
   let inline pskipChar label v : unit FParser = 
     fun c ->
-      let i = c.Pos
-      if i < c.End && v = c.Input.[i] then
-        c.SuccessAt () (i + 1)
+      let input = c.Input
+      let pos   = c.Pos
+      if pos < input.Length && v = input.[pos] then
+        c.SuccessAt () (pos + 1)
       else
-        c.ExpectedAt label i
+        c.ExpectedAt label pos
 
   let inline pstringSat1 label ([<InlineIfLambda>] sat) : string FParser = 
     fun c ->
