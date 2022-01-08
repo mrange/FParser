@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CsBenchmark\CsBenchmark.csproj" />
-    <ProjectReference Include="..\FParser\FParser.fsproj" />
+    <ProjectReference Include="..\FParser6\FParser6.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

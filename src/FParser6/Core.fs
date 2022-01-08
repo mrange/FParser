@@ -1,28 +1,10 @@
-﻿namespace FParser.Core
+﻿namespace FParser6
 
 type FParserContext(input : string) =
   class
     [<DefaultValue>] val mutable Pos : int
 
     member x.Input = input
-
-    member inline x.Scan ([<InlineIfLambda>] sat : char -> int -> bool) i : int =
-      let input     = x.Input
-      let mutable c = i
-      while (c < input.Length && if sat input.[c] c then c <- c + 1; true else false) do ()
-      c
-
-    member inline x.FlipDecision  ()  = x.Pos <- ~~~x.Pos
-    member inline x.IsGood        ()  = x.Pos >= 0
-    member inline x.IsBad         ()  = x.Pos < 0
-    member inline x.SuccessAt     v i = x.Pos <- i; v
-
-    member inline x.Expected (label : string) =
-      Unchecked.defaultof<_>
-
-    member inline x.ExpectedAt (label : string) i =
-      x.Pos <- ~~~i
-      Unchecked.defaultof<_>
   end
 
 type 'T FParser = FParserContext -> 'T
@@ -35,18 +17,36 @@ module FParser =
     let inline success v  = v
     let inline failure () = Unchecked.defaultof<_>
 
+    let inline scan (c : FParserContext) ([<InlineIfLambda>] sat : char -> int -> bool) i : int =
+      let input     = c.Input
+      let mutable p = i
+      while (p < input.Length && if sat input.[p] p then p <- p + 1; true else false) do ()
+      p
+
+    let inline flipDecision  (c : FParserContext)     = c.Pos <- ~~~c.Pos
+    let inline isGood        (c : FParserContext)     = c.Pos >= 0
+    let inline isBad         (c : FParserContext)     = c.Pos < 0
+    let inline successAt     (c : FParserContext) v i = c.Pos <- i; v
+
+    let inline expected (c : FParserContext) (label : string) =
+      Unchecked.defaultof<_>
+
+    let inline expectedAt (c : FParserContext) (label : string) i =
+      c.Pos <- ~~~i
+      Unchecked.defaultof<_>
+
     module Deduplicator =
       let pint (c : FParserContext) i =
-        let e = c.Scan (fun ch p -> ch >= '0' && ch <= '9') i
+        let e = scan c (fun ch p -> ch >= '0' && ch <= '9') i
         if i < e then
           let v = Int32.Parse (c.Input.AsSpan (i, e-i), NumberStyles.Integer, CultureInfo.InvariantCulture)
-          c.SuccessAt v e
+          successAt c v e
         else
-          c.ExpectedAt "int" i
+          expectedAt c "int" i
 
       let pskipWhitespace (c : FParserContext) i =
-        let e = c.Scan (fun ch p -> (ch >= '\u0009' && ch <= '\u000D') || (ch = '\u0020')) i
-        c.SuccessAt () e
+        let e = scan c (fun ch p -> (ch >= '\u0009' && ch <= '\u000D') || (ch = '\u0020')) i
+        successAt c () e
   open Details
 
   let inline (>+>) ([<InlineIfLambda>] v : _ -> _) ([<InlineIfLambda>] f : _ -> _) =
@@ -55,7 +55,7 @@ module FParser =
   let inline prun ([<InlineIfLambda>] pf : _ FParser) input =
     let c = FParserContext input
     let v = pf c
-    if c.IsGood () then
+    if isGood c then
       Ok v
     else
       Error (~~~c.Pos)
@@ -66,27 +66,27 @@ module FParser =
 
   let inline pexpected label : _ FParser =
     fun c ->
-      c.Expected label
+      expected c label
 
   let inline peof () : unit FParser =
     fun c ->
       let l = c.Input.Length
       if c.Pos >= l then
-        c.SuccessAt () l
+        successAt c () l
       else
-        c.ExpectedAt "eof" l
+        expectedAt c "eof" l
 
   let inline pchainLeft1 ([<InlineIfLambda>] psep : _ FParser) ([<InlineIfLambda>] pp : _ FParser) : _ FParser = 
     fun c ->
       let fv = pp c
-      if c.IsGood () then
+      if isGood c then
         let mutable res = fv
         while 
           (
             let sv = psep c
-            if c.IsGood () then
+            if isGood c then
               let rv = pp c
-              if c.IsGood () then
+              if isGood c then
                 res <- sv res rv
                 true
               else
@@ -95,7 +95,7 @@ module FParser =
                 false
             else
               // Failed to parse separator, all is good
-              c.FlipDecision ()
+              flipDecision c
               false
           ) do ()
         res
@@ -105,9 +105,9 @@ module FParser =
   let inline (<*>) ([<InlineIfLambda>] pf : _ FParser) ([<InlineIfLambda>] pv : _ FParser) : _ FParser = 
     fun c ->
       let fv = pf c
-      if c.IsGood () then
+      if isGood c then
         let vv = pv c
-        if c.IsGood () then
+        if isGood c then
           success (fv vv)
         else
           failure ()
@@ -117,9 +117,9 @@ module FParser =
   let inline (.>>) ([<InlineIfLambda>] pf : _ FParser) ([<InlineIfLambda>] ps : _ FParser) : _ FParser = 
     fun c ->
       let fv = pf c
-      if c.IsGood () then
+      if isGood c then
         let _ = ps c
-        if c.IsGood () then
+        if isGood c then
           success fv
         else
           failure ()
@@ -129,9 +129,9 @@ module FParser =
   let inline (>>.) ([<InlineIfLambda>] pf : _ FParser) ([<InlineIfLambda>] ps : _ FParser) : _ FParser = 
     fun c ->
       let _ = pf c
-      if c.IsGood () then
+      if isGood c then
         let sv = ps c
-        if c.IsGood () then
+        if isGood c then
           success sv
         else
           failure ()
@@ -141,9 +141,9 @@ module FParser =
   let inline (.>>.) ([<InlineIfLambda>] pf : _ FParser) ([<InlineIfLambda>] ps : _ FParser) : _ FParser = 
     fun c ->
       let fv = pf c
-      if c.IsGood () then
+      if isGood c then
         let sv = ps c
-        if c.IsGood () then
+        if isGood c then
           success (fv, sv)
         else
           failure ()
@@ -155,7 +155,7 @@ module FParser =
     fun c ->
       let spos = c.Pos
       let fv = pf c
-      if c.IsGood () then
+      if isGood c then
         success fv
       else
         c.Pos <- spos
@@ -164,7 +164,7 @@ module FParser =
   let inline (|>>) ([<InlineIfLambda>] pp : _ FParser) ([<InlineIfLambda>] m : _ -> _) : _ FParser = 
     fun c ->
       let pv = pp c
-      if c.IsGood () then
+      if isGood c then
         success (m pv)
       else
         failure ()
@@ -178,7 +178,7 @@ module FParser =
   let inline pdebug nm ([<InlineIfLambda>] pf : _ FParser) : _ FParser = 
     fun c ->
       let fv = pf c
-      if c.IsGood () then
+      if isGood c then
         printfn "GOOD - %s - %i - %A" nm c.Pos fv
         success fv
       else
@@ -194,36 +194,36 @@ module FParser =
       let input = c.Input
       let pos   = c.Pos
       if pos < input.Length then
-        c.SuccessAt input.[pos] (pos + 1)
+        successAt c input.[pos] (pos + 1)
       else
-        c.ExpectedAt "char" pos
+        expectedAt c "char" pos
 
   let inline pcharSat label ([<InlineIfLambda>] sat) : char FParser = 
     fun c ->
       let input = c.Input
       let pos   = c.Pos
       if pos < input.Length && sat (input.[pos]) then
-        c.SuccessAt c.Input.[pos] (pos + 1)
+        successAt c input.[pos] (pos + 1)
       else
-        c.ExpectedAt label pos
+        expectedAt c label pos
 
   let inline pskipChar label v : unit FParser = 
     fun c ->
       let input = c.Input
       let pos   = c.Pos
       if pos < input.Length && v = input.[pos] then
-        c.SuccessAt () (pos + 1)
+        successAt c () (pos + 1)
       else
-        c.ExpectedAt label pos
+        expectedAt c label pos
 
   let inline pstringSat1 label ([<InlineIfLambda>] sat) : string FParser = 
     fun c ->
       let i = c.Pos
-      let e = c.Scan sat i
+      let e = scan c sat i
       if i < e then
-        c.SuccessAt (c.Input.Substring(i, e - i)) e
+        successAt c (c.Input.Substring(i, e - i)) e
       else
-        c.ExpectedAt label i
+        expectedAt c label i
 
   let inline pskipWhitespace () : unit FParser = 
     fun c ->

@@ -37,184 +37,166 @@ open Common
 
 module BaselineCalculator =
   open System.Globalization
-  type ParserState(input : string) =
-    class
-      let mutable pos = 0
 
-      let consumeWhiteSpace () =
-        let inline isWhiteSpace ch = (ch >= '\u0009' && ch <= '\u000D') || (ch = '\u0020')
-        while pos < input.Length && isWhiteSpace (input.[pos]) do
-          pos <- pos + 1
+  let oops () = failwith "Programming error"
 
-      let skipChar c =
-        if pos < input.Length && input.[pos] = c then
-          pos <- pos + 1
-          consumeWhiteSpace ()
+  let consumeWhiteSpace (input : string) (current : int byref) =
+    let inline isWhiteSpace ch = (ch >= '\u0009' && ch <= '\u000D') || (ch = '\u0020')
+    let mutable pos = current
+    while pos < input.Length && isWhiteSpace (input.[pos]) do
+      pos <- pos + 1
+    current <- pos
+
+  let trySkipChar (input : string) (current : int byref) c =
+    let mutable pos = current
+    if pos < input.Length && input.[pos] = c then
+      pos     <- pos + 1
+      current <- pos
+      consumeWhiteSpace input &current
+      true
+    else
+      false
+
+  let tryParseIntExpr (input : string) (current : int byref) (e : Expr outref) =
+    let inline isDigit ch = ch >= '0' && ch <= '9'
+    let mutable pos = current
+
+    while pos < input.Length && isDigit (input.[pos]) do
+      pos <- pos + 1
+
+    if current < pos then
+      let v = Int32.Parse (input.AsSpan (current, pos - current), NumberStyles.Integer, CultureInfo.InvariantCulture)
+      e       <- Value v
+      current <- pos
+      consumeWhiteSpace input &current
+      true
+    else
+      false
+
+  let tryParseVariableExpr (input : string) (current : int byref) (e : Expr outref) =
+    let inline isLetter ch = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+    let mutable pos = current
+
+    while pos < input.Length && isLetter (input.[pos]) do
+      pos <- pos + 1
+
+    if current < pos then
+      let v = input.Substring(current, pos - current)
+      e       <- Variable v
+      current <- pos
+      consumeWhiteSpace input &current
+      true
+    else
+      false
+
+  let rec tryParseGroupExpr (input : string) (current : int byref) (e : Expr outref) =
+    if trySkipChar input &current '(' then
+      if tryParseOp1Expr input &current &e then
+        if trySkipChar input &current ')' then
+          true
+        else
+          false
+      else
+        false
+
+    else
+      false
+
+  and tryParseTermExpr (input : string) (current : int byref) (e : Expr outref) =
+    let spos = current
+    if tryParseIntExpr input &current &e then
+      true
+    else
+      current <- spos
+      if tryParseVariableExpr input &current &e then
+        true
+      else
+        current <- spos
+        if tryParseGroupExpr input &current &e then
           true
         else
           false
 
-      let oops () = failwith "Programming error"
-      member x.TryParseIntExpr (e : Expr outref) =
-        let ppos = pos
-        let inline isDigit ch = ch >= '0' && ch <= '9'
+  and tryParseOp0Expr (input : string) (current : int byref) (e : Expr outref) =
+    let mutable agg   = Unchecked.defaultof<_>
+    let zero          = char 0
 
-        while pos < input.Length && isDigit (input.[pos]) do
-          pos <- pos + 1
-
-        if ppos < pos then
-          let v = Int32.Parse (input.AsSpan (ppos, pos - ppos), NumberStyles.Integer, CultureInfo.InvariantCulture)
-          e <- Value v
-          consumeWhiteSpace ()
-          true
-        else
-          pos <- ppos
-          false
-
-      member x.TryParseVariableExpr (e : Expr outref) =
-        let ppos = pos
-        let inline isLetter ch = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
-
-        while pos < input.Length && isLetter (input.[pos]) do
-          pos <- pos + 1
-
-        if ppos < pos then
-          let v = input.Substring(ppos, pos - ppos)
-          e <- Variable v
-          consumeWhiteSpace ()
-          true
-        else
-          pos <- ppos
-          false
-
-      member x.TryParseGroupExpr (e : Expr outref) =
-        let ppos = pos
-
-        if skipChar '(' then
-          if x.TryParseOp1Expr &e then
-            if skipChar ')' then
-              true
-            else
-              pos <- ppos
-              false
+    if tryParseTermExpr input &current &agg then
+      let mutable state = 0
+      while state = 0 do
+        let op =
+          if   trySkipChar input &current '*' then '*'
+          elif trySkipChar input &current '/' then '/'
+          else zero
+        if op > zero then
+          let mutable next = Unchecked.defaultof<_>
+          if tryParseTermExpr input &current &next then
+            agg <- 
+              match op with
+              | '*' -> Binary ('*', ( * ), agg, next)
+              | '/' -> Binary ('/', ( * ), agg, next)
+              | _   -> oops ()
           else
-            pos <- ppos
-            false
-
+            // Bad
+            state <- 2 
         else
-          pos <- ppos
-          false
+          // Good
+          state <- 1
+      match state with
+      | 1 -> e <- agg; true
+      | 2 -> false
+      | _ -> oops ()
+    else
+      false
 
-      member x.TryParseTermExpr (e : Expr outref) =
-        let ppos = pos
+  and tryParseOp1Expr (input : string) (current : int byref) (e : Expr outref) =
+    let mutable agg   = Unchecked.defaultof<_>
+    let zero          = char 0
 
-        if x.TryParseIntExpr &e then
-          true
-        else
-          pos <- ppos
-          if x.TryParseVariableExpr &e then
-            true
+    if tryParseOp0Expr input &current &agg then
+      let mutable state = 0
+      while state = 0 do
+        let op =
+          if   trySkipChar input &current '+' then '+'
+          elif trySkipChar input &current '-' then '-'
+          else zero
+        if op > zero then
+          let mutable next = Unchecked.defaultof<_>
+          if tryParseOp0Expr input &current &next then
+            agg <- 
+              match op with
+              | '+' -> Binary ('+', ( + ), agg, next)
+              | '-' -> Binary ('-', ( - ), agg, next)
+              | _   -> oops ()
           else
-            pos <- ppos
-            if x.TryParseGroupExpr &e then
-              true
-            else
-              pos <- ppos
-              false
-
-      member x.TryParseOp0Expr (e : Expr outref) =
-        let ppos          = pos
-
-        let mutable agg   = Unchecked.defaultof<_>
-        let zero          = char 0
-
-        if x.TryParseTermExpr &agg then
-          let mutable state = 0
-          while state = 0 do
-            let op =
-              if   skipChar '*' then '*'
-              elif skipChar '/' then '/'
-              else zero
-            if op > zero then
-              let mutable next = Unchecked.defaultof<_>
-              if x.TryParseTermExpr &next then
-                agg <- 
-                  match op with
-                  | '*' -> Binary ('*', ( * ), agg, next)
-                  | '/' -> Binary ('/', ( * ), agg, next)
-                  | _   -> oops ()
-              else
-                // Bad
-                state <- 2 
-            else
-              // Good
-              state <- 1
-          match state with
-          | 1 -> e <- agg   ; true
-          | 2 -> pos <- ppos; false
-          | _ -> oops ()
+            // Bad
+            state <- 2 
         else
-          pos <- ppos
-          false
+          // Good
+          state <- 1
+      match state with
+      | 1 -> e <- agg   ; true
+      | 2 -> false
+      | _ -> oops ()
+    else
+      false
 
-      member x.TryParseOp1Expr (e : Expr outref) =
-        let ppos          = pos
+  let tryParseFullExpr (input : string) (current : int byref) (e : Expr outref) =
 
-        let mutable agg   = Unchecked.defaultof<_>
-        let zero          = char 0
-
-        if x.TryParseOp0Expr &agg then
-          let mutable state = 0
-          while state = 0 do
-            let op =
-              if   skipChar '+' then '+'
-              elif skipChar '-' then '-'
-              else zero
-            if op > zero then
-              let mutable next = Unchecked.defaultof<_>
-              if x.TryParseOp0Expr &next then
-                agg <- 
-                  match op with
-                  | '+' -> Binary ('+', ( + ), agg, next)
-                  | '-' -> Binary ('-', ( - ), agg, next)
-                  | _   -> oops ()
-              else
-                // Bad
-                state <- 2 
-            else
-              // Good
-              state <- 1
-          match state with
-          | 1 -> e <- agg   ; true
-          | 2 -> pos <- ppos; false
-          | _ -> oops ()
-        else
-          pos <- ppos
-          false
-
-      member x.TryParseFullExpr (e : Expr outref) =
-        let ppos = pos
-
-        consumeWhiteSpace ()
-        if x.TryParseOp1Expr &e then
-          // Eof?
-          pos >= input.Length
-        else
-          pos <- ppos
-          false
-
-      member x.Parse () =
-        pos <- 0
-        let mutable e = Unchecked.defaultof<_>
-        if x.TryParseFullExpr &e then
-          Ok e
-        else
-          Error pos
-    end
+    consumeWhiteSpace input &current
+    if tryParseOp1Expr input &current &e then
+      // Eof?
+      current >= input.Length
+    else
+      false
 
   let parse input =
-    let p = ParserState input
-    p.Parse ()
+    let mutable current = 0
+    let mutable e       = Unchecked.defaultof<_>
+    if tryParseFullExpr input &current &e then
+      Ok e
+    else
+      Error current
 
   let test () =
     let testCases =
@@ -233,7 +215,7 @@ module BaselineCalculator =
       printfn "  %s -> %A" testCase result
 
 module FParserCalculator =
-  open FParser.Core
+  open FParser6
   open FParser
 
   let inline ptoken label v = 
@@ -254,7 +236,7 @@ module FParserCalculator =
     | '-' -> fun l r -> Binary ('-', ( - ), l, r)
     | _   -> failwith "Expected + or -"
 
-  type ParserState() =
+  type ParserConfig () =
     class
       let struct (pexpr, sexpr) = pfwd<Expr> ()
 
@@ -275,7 +257,7 @@ module FParserCalculator =
     end
 
   let test () =
-    let p = ParserState()
+    let p = ParserConfig ()
     let testCases =
       [|
         "1"
@@ -298,7 +280,7 @@ module FParsecCalculator =
     skipChar v
     >>. spaces
 
-  type ParserState() =
+  type ParserConfig () =
     class
       let pexpr, rpexpr = createParserForwardedToRef ()
 
@@ -329,7 +311,7 @@ module FParsecCalculator =
     end
 
   let test () =
-    let p = ParserState ()
+    let p = ParserConfig ()
     let testCases =
       [|
         "1"
@@ -357,8 +339,8 @@ type ParserBenchmark() =
     let basicExpression   = "(123+2)*x"
     let complexExpression = "force*mass/(r*r)-G*MASS*mass/(r*r)"
 
-    let fparsec   = FParsecCalculator.ParserState  ()
-    let fparser   = FParserCalculator.ParserState ()
+    let fparsec   = FParsecCalculator.ParserConfig ()
+    let fparser   = FParserCalculator.ParserConfig ()
 
     [<Benchmark>]
     member x.Baseline_BasicExpression() =
