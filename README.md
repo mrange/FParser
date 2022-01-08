@@ -1,4 +1,4 @@
-# Writing parsers combinators with F#6 `[<InlineIfLambda>]`
+# Parsers combinators with F#6 `[<InlineIfLambda>]`
 
 For [F# Advent 2021](https://sergeytihon.com/2021/10/18/f-advent-calendar-2021/) I wrote a [blog post](https://gist.github.com/mrange/fbefd946dba6725a0b727b7d3fd81d6f) exploring how F#6 `[<InlineIfLambda>]` can improve data pipeline performance.
 
@@ -10,7 +10,7 @@ I was thinking of other places where `[<InlineIfLambda>]` can help and decided t
 
 Graham Hutton and Erik Meijer have written an excellent [introduction](https://www.cs.nott.ac.uk/~pszgmh/monparsing.pdf) to parser combinators. When I read this article many years ago it was the first time that I felt that I understood what Functional Programming is all about.
 
-We create a parser combinator library by defining what is a parser and then define various functions that combines combine parsers.
+We create a parser combinator library by defining what is a parser and then define various functions that combine parsers.
 
 A Parser could be this:
 
@@ -32,7 +32,7 @@ type 'T Parser = string -> int -> ('T*int) option
 
 The parser takes a string and the current position and returns a value and the position of the first unconsumed char if successful.
 
-While experimenting with performance I found that the overhead from create tuples and options was significant, switching to value tuples and options reduced performance but avoided GC pressure.
+While experimenting with performance I found that the overhead from creating tuples and options was significant, switching to value tuples and options reduced performance but avoided GC pressure.
 
 In the end I ended up with this:
 
@@ -171,7 +171,7 @@ Intel Core i5-3570K CPU 3.40GHz (Ivy Bridge), 1 CPU, 4 logical and 4 physical co
 |  FParsec_ComplexExpression | PGO | 1,467.9 ns |  5.57 ns |  5.21 ns | 0.3986 |   1,256 B |
 ```
 
-This does look very promising. As expected the `Baseline` parser does the best but `FParser` is not far behind. `FParsec` has very respectable performance but `FParser` manages to do a bit better. Now `FParsec` supports great error messages which is  currently not implemented in `FParser` but there are ways to support error messages without too much overhead.
+This does look very promising. As expected the `Baseline` parser does the best but `FParser` is not far behind. `FParsec` has very respectable performance but `FParser` manages to do a bit better. Now `FParsec` supports great error messages which is currently not implemented in `FParser` but there are ways to support error messages without too much overhead.
 
 Another nice aspect of `FParser` is that it adds less memory overhead than `FParsec`, the overhead comes from creating `FParserContext`
 
@@ -179,9 +179,8 @@ Another nice aspect of `FParser` is that it adds less memory overhead than `FPar
 
 ## Conclusion
 
-There is much more to investigate and improve but once again `[<InlineIfLambda>]` seems like its a powerful tool that allow us to write functional style programs with close to imperative performance.
+There is much more to investigate and improve but once again `[<InlineIfLambda>]` seems like its a powerful tool that allows us to write functional style programs with close to imperative performance.
 
 Regards,
 
 Mårten
-
