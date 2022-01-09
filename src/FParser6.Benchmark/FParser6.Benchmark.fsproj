@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CsBenchmark\CsBenchmark.csproj" />
+    <ProjectReference Include="..\CsParser\CsParser.csproj" />
     <ProjectReference Include="..\FParser6\FParser6.fsproj" />
   </ItemGroup>
 

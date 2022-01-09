@@ -7,6 +7,7 @@ open System
 open System.Text
 
 open CsBenchmark
+open CsParser
 
 type Expr =
   | Value     of int
@@ -212,7 +213,7 @@ module BaselineCalculator =
     printfn "Baseline calculator"
     for testCase in testCases do
       let result = resultToString <| parse testCase
-      printfn "  %s -> %A" testCase result
+      printfn "  %s -> %s" testCase result
 
 module FParserCalculator =
   open FParser6
@@ -271,7 +272,7 @@ module FParserCalculator =
     printfn "FParser calculator"
     for testCase in testCases do
       let result = resultToString <| p.Parse testCase
-      printfn "  %s -> %A" testCase result
+      printfn "  %s -> %s" testCase result
 
 module FParsecCalculator =
   open FParsec
@@ -328,7 +329,7 @@ module FParsecCalculator =
         match p.Parse testCase with
         | Success (v, _, _) -> sprintf "OK : %s" <| string v
         | Failure (s, _, _) -> sprintf "ERR: %s" <| string s
-      printfn "  %s -> %A" testCase result
+      printfn "  %s -> %s" testCase result
 
 [<Config(typeof<BenchmarkConfig>)>]
 [<MemoryDiagnoser>]
@@ -341,6 +342,7 @@ type ParserBenchmark() =
 
     let fparsec   = FParsecCalculator.ParserConfig ()
     let fparser   = FParserCalculator.ParserConfig ()
+    let csparser  = new CsParserCalculator ()
 
     [<Benchmark>]
     member x.Baseline_BasicExpression() =
@@ -355,6 +357,10 @@ type ParserBenchmark() =
       fparsec.Parse basicExpression
 
     [<Benchmark>]
+    member x.CsParser_BasicExpression() =
+      csparser.Parse basicExpression
+
+    [<Benchmark>]
     member x.Baseline_ComplexExpression() =
       BaselineCalculator.parse complexExpression
 
@@ -366,12 +372,17 @@ type ParserBenchmark() =
     member x.FParsec_ComplexExpression() =
       fparsec.Parse complexExpression
 
+    [<Benchmark>]
+    member x.CsParser_ComplexExpression() =
+      csparser.Parse complexExpression
+
   end
 
 #if DEBUG
 BaselineCalculator.test ()
 FParserCalculator.test ()
 FParsecCalculator.test ()
+CsParserCalculator.Test()
 #else
 BenchmarkRunner.Run<ParserBenchmark>() |> ignore
 #endif

@@ -20,7 +20,7 @@ module FParser =
     let inline scan (c : FParserContext) ([<InlineIfLambda>] sat : char -> int -> bool) i : int =
       let input     = c.Input
       let mutable p = i
-      while (p < input.Length && if sat input.[p] p then p <- p + 1; true else false) do ()
+      while (p < input.Length && if sat input.[p] (p - i) then p <- p + 1; true else false) do ()
       p
 
     let inline flipDecision  (c : FParserContext)     = c.Pos <- ~~~c.Pos
