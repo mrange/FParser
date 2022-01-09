@@ -1,5 +1,8 @@
 # Parsers combinators with F#6 `[<InlineIfLambda>]`
 
+_Thanks to [manofstick](https://gist.github.com/manofstick) peer reviewing the blog post._
+
+
 For [F# Advent 2021](https://sergeytihon.com/2021/10/18/f-advent-calendar-2021/) I wrote a [blog post](https://gist.github.com/mrange/fbefd946dba6725a0b727b7d3fd81d6f) exploring how F#6 `[<InlineIfLambda>]` can improve data pipeline performance.
 
 I was thinking of other places where `[<InlineIfLambda>]` can help and decided to try to build a parser combinator library with `[<InlineIfLambda>]`.
@@ -144,7 +147,7 @@ I also implemented a math expression parser using `FParsec` and painstakingly im
 
 ## Benchmark results
 
-Using `Benchmark.net` I compared the performance of `FParser`, `FParsec` and `Baseline`.
+Using `Benchmark.net` I compared the performance of `FParser`, `FParsec` and `Baseline`. As a late bonus I aslo implemented a calculator expression parser in `C#` using a delegate based parser combinator library.
 
 ```
 BenchmarkDotNet=v0.13.1, OS=Windows 10.0.19044.1415 (21H2)
@@ -157,23 +160,29 @@ Intel Core i5-3570K CPU 3.40GHz (Ivy Bridge), 1 CPU, 4 logical and 4 physical co
 
 |                     Method | Job |       Mean |    Error |   StdDev |  Gen 0 | Allocated |
 |--------------------------- |---- |-----------:|---------:|---------:|-------:|----------:|
-|   Baseline_BasicExpression | STD |   193.7 ns |  0.43 ns |  0.40 ns | 0.0610 |     192 B |
-|    FParser_BasicExpression | STD |   240.4 ns |  0.48 ns |  0.45 ns | 0.0710 |     224 B |
-|    FParsec_BasicExpression | STD |   714.0 ns |  1.30 ns |  1.22 ns | 0.1631 |     512 B |
-| Baseline_ComplexExpression | STD |   557.7 ns |  1.67 ns |  1.56 ns | 0.2699 |     848 B |
-|  FParser_ComplexExpression | STD |   713.1 ns |  1.86 ns |  1.65 ns | 0.2804 |     880 B |
-|  FParsec_ComplexExpression | STD | 1,709.3 ns | 22.47 ns | 21.02 ns | 0.3986 |   1,256 B |
-|   Baseline_BasicExpression | PGO |   167.2 ns |  0.53 ns |  0.50 ns | 0.0610 |     192 B |
-|    FParser_BasicExpression | PGO |   215.2 ns |  0.39 ns |  0.35 ns | 0.0713 |     224 B |
-|    FParsec_BasicExpression | PGO |   606.6 ns |  1.08 ns |  0.96 ns | 0.1631 |     512 B |
-| Baseline_ComplexExpression | PGO |   437.5 ns |  1.29 ns |  1.21 ns | 0.2699 |     848 B |
-|  FParser_ComplexExpression | PGO |   591.5 ns |  3.05 ns |  2.71 ns | 0.2804 |     880 B |
-|  FParsec_ComplexExpression | PGO | 1,467.9 ns |  5.57 ns |  5.21 ns | 0.3986 |   1,256 B |
+|   Baseline_BasicExpression | STD |   197.9 ns |  1.63 ns |  1.44 ns | 0.0610 |     192 B |
+|    FParser_BasicExpression | STD |   245.2 ns |  1.40 ns |  1.31 ns | 0.0710 |     224 B |
+|    FParsec_BasicExpression | STD |   734.3 ns |  4.70 ns |  4.17 ns | 0.1631 |     512 B |
+|   CsParser_BasicExpression | STD |   514.5 ns |  3.54 ns |  3.31 ns | 0.0610 |     192 B |
+| Baseline_ComplexExpression | STD |   579.4 ns |  2.69 ns |  2.38 ns | 0.2699 |     848 B |
+|  FParser_ComplexExpression | STD |   721.9 ns | 10.04 ns |  9.39 ns | 0.2804 |     880 B |
+|  FParsec_ComplexExpression | STD | 1,731.1 ns |  7.95 ns |  6.64 ns | 0.3986 |   1,256 B |
+| CsParser_ComplexExpression | STD | 1,375.4 ns |  6.31 ns |  5.91 ns | 0.2689 |     848 B |
+|   Baseline_BasicExpression | PGO |   171.5 ns |  1.68 ns |  1.57 ns | 0.0610 |     192 B |
+|    FParser_BasicExpression | PGO |   222.5 ns |  2.39 ns |  2.23 ns | 0.0713 |     224 B |
+|    FParsec_BasicExpression | PGO |   617.4 ns |  5.82 ns |  5.45 ns | 0.1631 |     512 B |
+|   CsParser_BasicExpression | PGO |   425.6 ns |  6.12 ns |  5.72 ns | 0.0610 |     192 B |
+| Baseline_ComplexExpression | PGO |   449.1 ns |  2.06 ns |  1.93 ns | 0.2699 |     848 B |
+|  FParser_ComplexExpression | PGO |   615.8 ns |  8.99 ns |  8.41 ns | 0.2804 |     880 B |
+|  FParsec_ComplexExpression | PGO | 1,564.1 ns | 14.88 ns | 13.92 ns | 0.3986 |   1,256 B |
+| CsParser_ComplexExpression | PGO | 1,228.4 ns |  6.07 ns |  5.68 ns | 0.2689 |     848 B |
 ```
 
 This does look very promising. As expected the `Baseline` parser does the best but `FParser` is not far behind. `FParsec` has very respectable performance but `FParser` manages to do a bit better. Now `FParsec` supports great error messages which is currently not implemented in `FParser` but there are ways to support error messages without too much overhead.
 
 Another nice aspect of `FParser` is that it adds less memory overhead than `FParsec`, the overhead comes from creating `FParserContext`
+
+`CsParser` falls between `FParser` and `FParsec` which is pretty good considering it's delegate based. `CsParser` also don't collect error information so comparing to `FParsec` is a bit unfair here as well.
 
 `PGO` uses a new feature in the runtime called [Dynamic Profile-Guided Optimization](https://gist.github.com/EgorBo/dc181796683da3d905a5295bfd3dd95b) which allows the jitter to improve code over time and does seem to give benefit to all parser variants over the standard approach.
 
