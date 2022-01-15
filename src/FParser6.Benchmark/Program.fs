@@ -11,7 +11,7 @@ open CsParser
 
 type Expr =
   | Value     of int
-  | Variable  of string
+  | Variable  of ReadOnlyMemory<char>
   | Binary    of char*(int->int->int)*Expr*Expr
 
   override x.ToString () =
@@ -28,6 +28,8 @@ type Expr =
         sb.Append ')' |> ignore
     traverse sb '+' x
     sb.ToString ()
+
+  static member Cons (s:string) = Variable (s.AsMemory())
 
 module Common =
   let resultToString r =
@@ -82,7 +84,7 @@ module BaselineCalculator =
       pos <- pos + 1
 
     if current < pos then
-      let v = input.Substring(current, pos - current)
+      let v = input.AsMemory(current, pos - current)
       e       <- Variable v
       current <- pos
       consumeWhiteSpace input &current
@@ -287,7 +289,7 @@ module FParsecCalculator =
 
       let pterm = 
             (pint32 |>> Value .>> spaces)
-        <|> (many1SatisfyL (fun ch -> (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) "variable" |>> Variable)
+        <|> (many1SatisfyL (fun ch -> (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) "variable" |>> Expr.Cons)
         <|> (between (ptoken '(') (ptoken ')') pexpr)
 
       let op0 ch =

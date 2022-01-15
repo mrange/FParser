@@ -216,12 +216,12 @@ module FParser =
       else
         expectedAt c label pos
 
-  let inline pstringSat1 label ([<InlineIfLambda>] sat) : string FParser = 
+  let inline pstringSat1 label ([<InlineIfLambda>] sat) : ReadOnlyMemory<char> FParser = 
     fun c ->
       let i = c.Pos
       let e = scan c sat i
       if i < e then
-        successAt c (c.Input.Substring(i, e - i)) e
+        successAt c (c.Input.AsMemory(i, e - i)) e
       else
         expectedAt c label i
 
